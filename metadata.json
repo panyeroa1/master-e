@@ -1,0 +1,7 @@
+{
+  "name": "MasterE",
+  "description": "Code Viber, Barkada ... Lahat na",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
