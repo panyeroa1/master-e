@@ -9,6 +9,32 @@ import { FunctionCall } from '../state';
 
 export const seafarerTools: FunctionCall[] = [
   {
+    name: 'generate_image',
+    description: 'Generates an image based on the users request. Use this to visualize concepts, places, or items.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        prompt: { type: 'STRING', description: 'A detailed description of the image to generate.' },
+      },
+      required: ['prompt'],
+    },
+    isEnabled: true,
+    scheduling: FunctionResponseScheduling.INTERRUPT,
+  },
+  {
+    name: 'edit_image',
+    description: 'Edits the previously generated image based on new instructions. This tool requires a previously generated image to exist in the context.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        prompt: { type: 'STRING', description: 'Instructions on how to modify the previous image.' },
+      },
+      required: ['prompt'],
+    },
+    isEnabled: true,
+    scheduling: FunctionResponseScheduling.INTERRUPT,
+  },
+  {
     name: 'upsert_seafarer_profile',
     description: 'Saves or updates the seafarer\'s profile data (name, rank, years of experience, status).',
     parameters: {

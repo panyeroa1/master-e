@@ -12,11 +12,11 @@ import ToolEditorModal from './ToolEditorModal';
 
 export default function Sidebar() {
   const { isSidebarOpen, toggleSidebar } = useUI();
-  const { style, googleSearch, setStyle, setGoogleSearch } =
+  const { style, googleSearch, imageModel, setStyle, setGoogleSearch, setImageModel } =
     useSettings();
   const { tools, toggleTool, addTool, removeTool, updateTool, template, setTemplate } = useTools();
   const { client, connected } = useLiveAPIContext();
-  const { suggestions, removeSuggestion, acceptSuggestion, isAnalyzing, appliedCorrections } = useSupervisor();
+  const { suggestions, logs, removeSuggestion, acceptSuggestion, isAnalyzing } = useSupervisor();
   const { turns } = useLogStore();
 
   const [activeTab, setActiveTab] = useState<'settings' | 'messages'>('settings');
@@ -44,7 +44,6 @@ export default function Sidebar() {
   };
 
   const applyCorrection = (id: string, newPrompt: string) => {
-    // Note: setSystemPrompt is retrieved from store but UI is hidden as requested
     useSettings.getState().setSystemPrompt(newPrompt);
     acceptSuggestion(id);
     
@@ -111,7 +110,7 @@ export default function Sidebar() {
 
         {activeTab === 'settings' && (
           <div className="sidebar-content">
-            {/* Correction Section (Pending) */}
+            {/* Correction Section */}
             <div className="sidebar-section">
                <button 
                  className="accordion-header" 
@@ -119,7 +118,7 @@ export default function Sidebar() {
                >
                  <span className="icon">{isCorrectionsOpen ? 'expand_more' : 'chevron_right'}</span>
                  <h4 className="sidebar-section-title" style={{marginBottom:0}}>
-                   Attention: Agent Correction
+                   Active Corrections
                    {suggestions.length > 0 && <span className="badge">{suggestions.length}</span>}
                  </h4>
                  {isAnalyzing && <span className="analyzing-spinner icon">sync</span>}
@@ -128,7 +127,7 @@ export default function Sidebar() {
                {isCorrectionsOpen && (
                  <div className="corrections-list">
                    {suggestions.length === 0 ? (
-                     <div className="empty-state">No corrections detected yet.</div>
+                     <div className="empty-state">No active suggestions. Speak to the agent to trigger supervision.</div>
                    ) : (
                      suggestions.map(s => (
                        <div key={s.id} className="correction-card">
@@ -165,28 +164,31 @@ export default function Sidebar() {
                >
                  <span className="icon">{isHistoryOpen ? 'expand_more' : 'chevron_right'}</span>
                  <h4 className="sidebar-section-title" style={{marginBottom:0}}>
-                   Corrections Log
-                   {appliedCorrections.length > 0 && <span className="badge gray">{appliedCorrections.length}</span>}
+                   All Correction Logs
+                   {logs.length > 0 && <span className="badge gray">{logs.length}</span>}
                  </h4>
                </button>
                
                {isHistoryOpen && (
                  <div className="corrections-list">
-                   {appliedCorrections.length === 0 ? (
-                     <div className="empty-state">No corrections applied yet.</div>
+                   {logs.length === 0 ? (
+                     <div className="empty-state">No history yet.</div>
                    ) : (
-                     appliedCorrections.map(s => (
-                       <div key={s.id} className="correction-card history-card">
+                     logs.map(log => (
+                       <div key={log.id} className={`correction-card ${log.type === 'applied' ? 'history-card' : ''} ${log.type === 'dismissed' ? 'dismissed-card' : ''}`}>
                          <div className="correction-header">
-                           <span className="icon check-icon">check_circle</span>
-                           <span className="timestamp">{s.appliedAt.toLocaleTimeString()}</span>
+                           <span className="icon">
+                             {log.type === 'applied' ? 'check_circle' : log.type === 'dismissed' ? 'cancel' : 'info'}
+                           </span>
+                           <span className="timestamp">{log.timestamp.toLocaleTimeString()}</span>
                          </div>
-                         <p className="correction-summary"><strong>Issue:</strong> {s.summary}</p>
-                         <p className="correction-summary"><strong>User said:</strong> "{s.originalFeedback}"</p>
-                         <details className="prompt-preview">
-                           <summary>View Applied Prompt</summary>
-                           <pre>{s.newSystemPrompt}</pre>
-                         </details>
+                         <p className="correction-summary">{log.summary}</p>
+                         {log.detail && (
+                           <details className="prompt-preview">
+                             <summary>Details</summary>
+                             <pre>{log.detail}</pre>
+                           </details>
+                         )}
                        </div>
                      ))
                    )}
@@ -205,15 +207,8 @@ export default function Sidebar() {
                     <option value="papap-pipoy">Papap Pipoy (Orbitz Radio)</option>
                   </select>
                 </label>
-                
-                {/* 
-                  HIDDEN FIELDS AS PER REQUEST:
-                  - System Prompt
-                  - Model
-                  - Voice
-                */}
-                
               </fieldset>
+              
               <label>
                 Style
                 <select value={style} onChange={e => setStyle(e.target.value)}>
@@ -224,6 +219,15 @@ export default function Sidebar() {
                   ))}
                 </select>
               </label>
+
+              <label>
+                Image Gen Model
+                <select value={imageModel} onChange={e => setImageModel(e.target.value)} disabled={connected}>
+                    <option value="gemini-2.5-flash-image">Gemini 2.5 Flash (Fast)</option>
+                    <option value="gemini-3-pro-image-preview">Gemini 3 Pro (High Quality)</option>
+                </select>
+              </label>
+
               <div className="tool-item" style={{ marginTop: '8px' }}>
                 <label className="tool-checkbox-wrapper">
                   <input
@@ -301,6 +305,11 @@ export default function Sidebar() {
                   <div className="message-sender">{turn.role === 'user' ? 'You' : turn.role === 'agent' ? 'Panyero' : 'System'}</div>
                   <div className="message-bubble">
                     {turn.text}
+                    {turn.image && (
+                      <div className="message-image">
+                        <img src={`data:image/png;base64,${turn.image}`} alt="Generated content" />
+                      </div>
+                    )}
                     {turn.groundingChunks && turn.groundingChunks.length > 0 && (
                       <div className="grounding-chunks">
                         <br/>
@@ -420,6 +429,10 @@ export default function Sidebar() {
         .history-card {
           border-color: var(--Green-700);
         }
+        .dismissed-card {
+           border-color: var(--Neutral-50);
+           opacity: 0.7;
+        }
         .correction-header {
           display: flex;
           justify-content: space-between;
@@ -491,6 +504,17 @@ export default function Sidebar() {
           border: 0;
           border-top: 1px solid var(--gray-800);
           margin: 0;
+        }
+        
+        .message-image {
+          margin-top: 8px;
+          border-radius: 8px;
+          overflow: hidden;
+        }
+        .message-image img {
+          width: 100%;
+          height: auto;
+          display: block;
         }
       `}</style>
     </>

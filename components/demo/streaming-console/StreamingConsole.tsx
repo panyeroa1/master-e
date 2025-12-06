@@ -60,7 +60,7 @@ export default function StreamingConsole() {
     }
   }, [style, connected, client]);
 
-  // Silence Detection Timer
+  // Silence Handler Agent Logic
   useEffect(() => {
     const interval = setInterval(() => {
       if (!connected) return;
@@ -68,9 +68,7 @@ export default function StreamingConsole() {
       const timeSinceActivity = Date.now() - lastActivityRef.current;
       const currentTurns = useLogStore.getState().turns;
 
-      // START OF CALL SILENCE: "Hello? Who's this?"
-      // Check if we are at the very beginning (<= 1 turn, which is likely the agent's first hello)
-      // and user hasn't spoken for ~4.5 seconds.
+      // INITIAL SILENCE PROTOCOL (Hello? Who's this?)
       if (
         currentTurns.length <= 1 && 
         timeSinceActivity > 4500 && 
@@ -78,38 +76,36 @@ export default function StreamingConsole() {
         silenceStageRef.current === 0
       ) {
          initialSilenceRef.current = true;
-         client.send([{ text: `[SYSTEM: User hasn't responded. Say "Hello? ... Who's this?" naturally with slight confusion.]` }]);
-         // We do not increment silenceStageRef here to allow standard logic to take over later if needed.
+         const text = `[SYSTEM: User hasn't responded. Say "Hello? ... Who's this?" naturally with slight confusion.]`;
+         client.send([{ text }]);
+         // Don't increment stage yet
          return; 
       }
       
-      // Stage 1: 12 seconds - Natural Contextual Re-engagement
+      // STAGE 1: CONTEXTUAL RE-ENGAGEMENT (12s)
       if (timeSinceActivity > 12000 && silenceStageRef.current === 0) {
         silenceStageRef.current = 1;
         
-        // Dynamic Context Instruction which allows the System Prompt protocol to take over
-        client.send([{ 
-          text: `[SYSTEM_NOTIFICATION: User has been silent for 12 seconds. ACTION: Execute your specific SILENCE / DEAD AIR PROTOCOL. Re-engage dynamically based on your persona.]` 
-        }]);
+        const systemMsg = `[SYSTEM_NOTIFICATION: User has been silent for 12 seconds. ACTION: Execute your specific SILENCE / DEAD AIR PROTOCOL. Re-engage dynamically based on your persona.]`;
+        client.send([{ text: systemMsg }]);
 
         useLogStore.getState().addTurn({
           role: 'system',
-          text: `⚡ System: Silence detected (12s) - Requesting persona-based re-engagement`,
+          text: `⚡ Silence Handler: 12s detected. Triggering re-engagement protocol.`,
           isFinal: true
         });
       }
 
-      // Stage 2: 45 seconds - Persistent silence / Audio check
+      // STAGE 2: CONNECTION CHECK (45s)
       if (timeSinceActivity > 45000 && silenceStageRef.current === 1) {
         silenceStageRef.current = 2;
         
-        client.send([{ 
-          text: `[SYSTEM_NOTIFICATION: The user has been silent for 45 seconds. There might be an audio issue. Ask "Can you hear me?" or politely offer to pause/end the call if they are busy.]` 
-        }]);
+        const systemMsg = `[SYSTEM_NOTIFICATION: The user has been silent for 45 seconds. There might be an audio issue. Ask "Can you hear me?" or politely offer to pause/end the call if they are busy.]`;
+        client.send([{ text: systemMsg }]);
 
         useLogStore.getState().addTurn({
           role: 'system',
-          text: '⚡ System: Persistent silence (45s) - Triggering connection check',
+          text: '⚡ Silence Handler: 45s detected. Triggering connection check.',
           isFinal: true
         });
       }

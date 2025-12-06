@@ -522,22 +522,26 @@ export const useSettings = create<{
   model: string;
   voice: string;
   style: string;
+  imageModel: string;
   googleSearch: boolean;
   setSystemPrompt: (prompt: string) => void;
   setModel: (model: string) => void;
   setVoice: (voice: string) => void;
   setStyle: (style: string) => void;
+  setImageModel: (model: string) => void;
   setGoogleSearch: (enabled: boolean) => void;
 }>(set => ({
   systemPrompt: systemPrompts['niyero'],
   model: DEFAULT_LIVE_API_MODEL,
   voice: DEFAULT_VOICE,
   style: 'Energetic',
+  imageModel: 'gemini-2.5-flash-image',
   googleSearch: false,
   setSystemPrompt: prompt => set({ systemPrompt: prompt }),
   setModel: model => set({ model }),
   setVoice: voice => set({ voice }),
   setStyle: style => set({ style }),
+  setImageModel: imageModel => set({ imageModel }),
   setGoogleSearch: googleSearch => set({ googleSearch }),
 }));
 
@@ -563,13 +567,17 @@ export interface CorrectionSuggestion {
   newSystemPrompt: string;
 }
 
-export interface AppliedCorrection extends CorrectionSuggestion {
-  appliedAt: Date;
+export interface SupervisorLog {
+  id: string;
+  timestamp: Date;
+  type: 'detected' | 'applied' | 'dismissed';
+  summary: string;
+  detail?: string;
 }
 
 export const useSupervisor = create<{
   suggestions: CorrectionSuggestion[];
-  appliedCorrections: AppliedCorrection[];
+  logs: SupervisorLog[];
   isAnalyzing: boolean;
   addSuggestion: (suggestion: CorrectionSuggestion) => void;
   removeSuggestion: (id: string) => void;
@@ -577,16 +585,42 @@ export const useSupervisor = create<{
   setAnalyzing: (isAnalyzing: boolean) => void;
 }>(set => ({
   suggestions: [],
-  appliedCorrections: [],
+  logs: [],
   isAnalyzing: false,
-  addSuggestion: (suggestion) => set(state => ({ suggestions: [suggestion, ...state.suggestions] })),
-  removeSuggestion: (id) => set(state => ({ suggestions: state.suggestions.filter(s => s.id !== id) })),
+  addSuggestion: (suggestion) => set(state => ({ 
+    suggestions: [suggestion, ...state.suggestions],
+    logs: [{
+      id: crypto.randomUUID(),
+      timestamp: new Date(),
+      type: 'detected',
+      summary: `Correction detected: ${suggestion.summary}`,
+      detail: suggestion.originalFeedback
+    }, ...state.logs]
+  })),
+  removeSuggestion: (id) => set(state => {
+    const suggestion = state.suggestions.find(s => s.id === id);
+    return { 
+      suggestions: state.suggestions.filter(s => s.id !== id),
+      logs: suggestion ? [{
+        id: crypto.randomUUID(),
+        timestamp: new Date(),
+        type: 'dismissed',
+        summary: `Dismissed: ${suggestion.summary}`
+      }, ...state.logs] : state.logs
+    };
+  }),
   acceptSuggestion: (id) => set(state => {
     const suggestion = state.suggestions.find(s => s.id === id);
     if (!suggestion) return state;
     return {
       suggestions: state.suggestions.filter(s => s.id !== id),
-      appliedCorrections: [{ ...suggestion, appliedAt: new Date() }, ...state.appliedCorrections]
+      logs: [{
+        id: crypto.randomUUID(),
+        timestamp: new Date(),
+        type: 'applied',
+        summary: `Applied: ${suggestion.summary}`,
+        detail: suggestion.newSystemPrompt
+      }, ...state.logs]
     };
   }),
   setAnalyzing: (isAnalyzing) => set({ isAnalyzing }),
@@ -691,6 +725,7 @@ export interface ConversationTurn {
   toolUseRequest?: LiveServerToolCall;
   toolUseResponse?: LiveClientToolResponse;
   groundingChunks?: GroundingChunk[];
+  image?: string; // Base64 encoded image
 }
 
 export const useLogStore = create<{
