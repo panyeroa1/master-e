@@ -4,10 +4,9 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 import { useState, useEffect } from 'react';
-import { usePersonaStore, PersonaConfig, useSettings } from '@/lib/state';
+import { usePersonaStore, PersonaConfig } from '@/lib/state';
 import { seafarerTools } from '@/lib/tools/seafarer-tools';
 import { AVAILABLE_VOICES, DEFAULT_VOICE } from '@/lib/constants';
-import cn from 'classnames';
 
 export default function AdminPortal() {
   const { personas, addPersona, removePersona } = usePersonaStore();
