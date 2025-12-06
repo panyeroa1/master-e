@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import { seafarerTools } from './tools/seafarer-tools';
 import { DEFAULT_LIVE_API_MODEL, DEFAULT_VOICE } from './constants';
 import {
@@ -12,14 +13,14 @@ import {
   LiveServerToolCall,
 } from '@google/genai';
 
-export type Template = 'papap-pipoy' | 'niyero';
+export type Template = 'papap-pipoy' | 'niyero' | 'custom';
 
-const toolsets: Record<Template, FunctionCall[]> = {
+const toolsets: Record<string, FunctionCall[]> = {
   'papap-pipoy': seafarerTools,
   'niyero': seafarerTools,
 };
 
-const systemPrompts: Record<Template, string> = {
+const systemPrompts: Record<string, string> = {
   'papap-pipoy': `# SYSTEM PROMPT · LIVE AUDIO MODEL
 Persona: “Papap Pipoy” · Host of “Choke Time with Papap Pipoy”
 Station: 101.8 Orbitz Radio Manila
@@ -515,6 +516,37 @@ If the user is silent for ~10-12 seconds (System will notify you):
 };
 
 /**
+ * Custom Persona Storage
+ */
+export interface PersonaConfig {
+  id: string;
+  name: string;
+  slug: string;
+  systemPrompt: string;
+  voice: string;
+  enabledTools: string[]; // Tool names
+}
+
+export const usePersonaStore = create(
+  persist<{
+    personas: PersonaConfig[];
+    addPersona: (persona: PersonaConfig) => void;
+    getPersonaBySlug: (slug: string) => PersonaConfig | undefined;
+    removePersona: (id: string) => void;
+  }>(
+    (set, get) => ({
+      personas: [],
+      addPersona: (persona) => set((state) => ({ personas: [...state.personas, persona] })),
+      getPersonaBySlug: (slug) => get().personas.find((p) => p.slug === slug),
+      removePersona: (id) => set((state) => ({ personas: state.personas.filter((p) => p.id !== id) })),
+    }),
+    {
+      name: 'panyero-personas',
+    }
+  )
+);
+
+/**
  * Settings
  */
 export const useSettings = create<{
@@ -641,6 +673,7 @@ export const useTools = create<{
   tools: FunctionCall[];
   template: Template;
   setTemplate: (template: Template) => void;
+  hydrateCustomPersona: (persona: PersonaConfig) => void;
   toggleTool: (toolName: string) => void;
   addTool: () => void;
   removeTool: (toolName: string) => void;
@@ -649,8 +682,26 @@ export const useTools = create<{
   tools: seafarerTools,
   template: 'niyero',
   setTemplate: (template: Template) => {
-    set({ tools: toolsets[template], template });
-    useSettings.getState().setSystemPrompt(systemPrompts[template]);
+    if (template !== 'custom') {
+      set({ tools: toolsets[template], template });
+      useSettings.getState().setSystemPrompt(systemPrompts[template]);
+    } else {
+      set({ template: 'custom' });
+    }
+  },
+  hydrateCustomPersona: (persona: PersonaConfig) => {
+    // 1. Construct tools list with correct enabled state
+    // We use seafarerTools as the base registry of all possible tools for now
+    const hydratedTools = seafarerTools.map(tool => ({
+      ...tool,
+      isEnabled: persona.enabledTools.includes(tool.name)
+    }));
+
+    set({ tools: hydratedTools, template: 'custom' });
+    
+    // 2. Set System Prompt and Voice
+    useSettings.getState().setSystemPrompt(persona.systemPrompt);
+    useSettings.getState().setVoice(persona.voice);
   },
   toggleTool: (toolName: string) =>
     set(state => ({

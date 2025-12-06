@@ -27,6 +27,14 @@ const welcomeContent: Record<Template, { title: string; description: string; pro
       "Goods ba ang offer na $1500 para sa OS?",
     ],
   },
+  'custom': {
+    title: 'Custom Agent',
+    description: 'A custom configured agent loaded via URL parameters.',
+    prompts: [
+      "Hello! Who are you?",
+      "What services do you offer?",
+    ],
+  },
 };
 
 const WelcomeScreen: React.FC = () => {
@@ -39,6 +47,7 @@ const WelcomeScreen: React.FC = () => {
           <span className="welcome-icon">mic</span>
           <div className="title-selector">
             <select value={template} onChange={(e) => setTemplate(e.target.value as Template)} aria-label="Select a template">
+              {template === 'custom' && <option value="custom">Custom Agent (Active)</option>}
               <option value="niyero">Kapitan Niyero (Seafarer Mentor)</option>
               <option value="papap-pipoy">Papap Pipoy (Orbitz Radio)</option>
             </select>

@@ -1,3 +1,4 @@
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -18,13 +19,16 @@
  * limitations under the License.
  */
 
+import { useEffect, useState } from 'react';
 import ControlTray from './components/console/control-tray/ControlTray';
 import ErrorScreen from './components/demo/ErrorScreen';
 import StreamingConsole from './components/demo/streaming-console/StreamingConsole';
+import AdminPortal from './components/admin/AdminPortal'; // Import Admin Portal
 
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
 import { LiveAPIProvider } from './contexts/LiveAPIContext';
+import { usePersonaStore, useTools } from './lib/state';
 
 // Get API key from process.env.API_KEY as per coding guidelines
 const API_KEY = process.env.API_KEY as string;
@@ -34,6 +38,41 @@ const API_KEY = process.env.API_KEY as string;
  * Manages video streaming state and provides controls for webcam/screen capture.
  */
 function App() {
+  const [view, setView] = useState<'app' | 'admin'>('app');
+  const [personaLoading, setPersonaLoading] = useState(false);
+  const { hydrateCustomPersona } = useTools();
+  const { getPersonaBySlug } = usePersonaStore();
+
+  useEffect(() => {
+    // 1. Check for Admin Mode
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('admin') === 'true') {
+      setView('admin');
+      return;
+    }
+
+    // 2. Check for Persona Hydration
+    const personaSlug = params.get('p');
+    if (personaSlug) {
+      setPersonaLoading(true);
+      // Small timeout to ensure store is ready if utilizing async persistence (though localstorage is sync usually)
+      setTimeout(() => {
+        const persona = getPersonaBySlug(personaSlug);
+        if (persona) {
+          hydrateCustomPersona(persona);
+          console.log(`[App] Hydrated persona: ${persona.name}`);
+        } else {
+          console.warn(`[App] Persona slug "${personaSlug}" not found.`);
+        }
+        setPersonaLoading(false);
+      }, 50);
+    }
+  }, []);
+
+  if (view === 'admin') {
+    return <AdminPortal />;
+  }
+
   return (
     <div className="App">
       <LiveAPIProvider apiKey={API_KEY}>
@@ -43,8 +82,11 @@ function App() {
         <div className="streaming-console">
           <main>
             <div className="main-app-area">
-              <StreamingConsole />
-
+              {personaLoading ? (
+                <div style={{color: 'var(--gray-500)', fontSize: '1.2rem'}}>Loading Agent...</div>
+              ) : (
+                <StreamingConsole />
+              )}
             </div>
 
             <ControlTray></ControlTray>
